@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Gensyn BlockAssist — unified menu (RU/EN)
+# Gensyn BlockAssist — unified menu (EN)
 # 1) Install/Configure VNC on server
 # 2) Install Block Assist (inside VNC)  [pyenv global 3.10, Chrome only]
 # 3) Run Block Assist (inside VNC)
@@ -54,12 +54,11 @@ EOF
   printf "%b\n\n" "${BLUE}Donate:${RESET}   0x0004230c13c3890F34Bb9C9683b91f539E809000"
 }
 
-press_enter(){ printf "%b" "${GRAY}Нажмите Enter для продолжения... / Press Enter to continue...${RESET}"; read -r; }
+press_enter(){ printf "%b" "${GRAY}Press Enter to continue...${RESET}"; read -r; }
 
 # ========= 1) VNC on server =========
 install_vnc_server(){
-  printf "%b\n" "${MAGENTA}${BOLD}▌ Обновление репозиториев и установка VNC (сервер)${RESET}"
-  printf "%b\n" "${MAGENTA}▌ Update repositories & install VNC (server)${RESET}"
+  printf "%b\n" "${MAGENTA}${BOLD}▌ Update repositories & install VNC (server)${RESET}"
   printf "%b\n" "${LINE}"
 
   echo -e "${CYAN}[*] Generating VNC password...${RESET}"
@@ -69,8 +68,19 @@ install_vnc_server(){
   with_sudo apt-get update -y && with_sudo apt-get upgrade -y
 
   echo -e "${CYAN}[*] Installing desktop environment + tools...${RESET}"
+  # Base packages that should be available on all Ubuntu versions
   with_sudo apt-get install -y xfce4 xfce4-goodies autocutsel xclip curl wget git \
-    software-properties-common dbus-x11 libglu1-mesa gnupg libegl1-mesa
+    software-properties-common dbus-x11 libglu1-mesa gnupg
+  
+  # Try to install graphics packages with fallbacks
+  echo -e "${CYAN}[*] Installing graphics libraries...${RESET}"
+  with_sudo apt-get install -y mesa-utils libgl1-mesa-glx || true
+  
+  # Try libegl packages with fallbacks
+  if ! with_sudo apt-get install -y libegl1-mesa 2>/dev/null; then
+    echo -e "${YELLOW}[WARN] libegl1-mesa not available, trying alternatives...${RESET}"
+    with_sudo apt-get install -y libegl1 || with_sudo apt-get install -y libglvnd0 || true
+  fi
 
   echo -e "${CYAN}[*] Downloading & Installing VirtualGL...${RESET}"
   VGL_VER="3.1"
@@ -139,12 +149,11 @@ EOF
 
 # ========= 2) Install Block Assist inside VNC (pyenv global, Chrome only) =========
 install_blockassist(){
-  printf "%b\n" "${MAGENTA}${BOLD}▌ Установка Block Assist (внутри VNC)${RESET}"
-  printf "%b\n" "${MAGENTA}▌ Install Block Assist (inside VNC)${RESET}"
+  printf "%b\n" "${MAGENTA}${BOLD}▌ Install Block Assist (inside VNC)${RESET}"
   printf "%b\n" "${LINE}"
 
   with_sudo apt-get update -y
-  # утилиты для XDG и .desktop
+  # utilities for XDG and .desktop
   with_sudo apt-get install -y xdg-utils desktop-file-utils
 
   # --- Browser: always install Google Chrome (VNC-friendly)
@@ -155,7 +164,7 @@ install_blockassist(){
   }
   with_sudo apt-get install -y /tmp/chrome.deb || with_sudo apt-get -y -f install
 
-  # VNC-friendly wrapper (+флаги для работы под root/VNC)
+  # VNC-friendly wrapper (+flags for root/VNC operation)
   with_sudo tee /usr/local/bin/google-chrome-vnc >/dev/null <<'SH'
 #!/usr/bin/env bash
 set -e
@@ -167,7 +176,7 @@ ARGS=(--no-sandbox --disable-dev-shm-usage --no-first-run --no-default-browser-c
 SH
   with_sudo chmod +x /usr/local/bin/google-chrome-vnc
 
-  # Ярлык на рабочий стол (опционально)
+  # Desktop shortcut (optional)
   mkdir -p "$HOME/Desktop" "$HOME/.local/share/applications"
   cat > "$HOME/Desktop/google-chrome.desktop" <<'EOF'
 [Desktop Entry]
@@ -181,7 +190,7 @@ Categories=Network;WebBrowser;
 EOF
   chmod +x "$HOME/Desktop/google-chrome.desktop" 2>/dev/null || true
 
-  # Desktop-файл, который использует wrapper, и регистрация как default
+  # Desktop file that uses wrapper, and registration as default
   with_sudo tee /usr/share/applications/google-chrome-vnc.desktop >/dev/null <<'EOF'
 [Desktop Entry]
 Name=Google Chrome (VNC-safe)
@@ -211,7 +220,7 @@ EOF
     xdg-mime default "$DESKTOP_ID" x-scheme-handler/https 2>/dev/null || true
   fi
 
-  # 3) продублировать в ~/.config/mimeapps.list
+  # 3) duplicate in ~/.config/mimeapps.list
   mkdir -p "$HOME/.config"
   MIMERC="$HOME/.config/mimeapps.list"
   [ -f "$MIMERC" ] || touch "$MIMERC"
@@ -290,20 +299,18 @@ EOF
   echo -e "${CYAN}[*] Installing Java 8 (OpenJDK)...${RESET}"
   with_sudo apt-get install -y openjdk-8-jdk
 
-  echo -e "${GREEN}=== Установка завершена / Install complete ===${RESET}"
-  echo -e "${YELLOW}Для запуска / To run:${RESET}"
+  echo -e "${GREEN}=== Install complete ===${RESET}"
+  echo -e "${YELLOW}To run:${RESET}"
   echo -e "${GREEN}3) Run Block Assist (inside VNC)${RESET}"
 }
 
 # ========= 3) Run Block Assist (inside VNC) =========
 run_blockassist(){
-  printf "%b\n" "${MAGENTA}${BOLD}▌ Запуск Block Assist (внутри VNC)${RESET}"
-  printf "%b\n" "${MAGENTA}▌ Run Block Assist (inside VNC)${RESET}"
+  printf "%b\n" "${MAGENTA}${BOLD}▌ Run Block Assist (inside VNC)${RESET}"
   printf "%b\n" "${LINE}"
 
   if [ ! -d "$HOME/blockassist" ]; then
-    echo -e "${YELLOW}~/blockassist не найден. Сначала выполните пункт 2.${RESET}"
-    echo -e "${GRAY}~/blockassist not found. Please run step 2 first.${RESET}"
+    echo -e "${YELLOW}~/blockassist not found. Please run step 2 first.${RESET}"
     return 1
   fi
 
@@ -320,8 +327,7 @@ run_blockassist(){
 
 # ========= 4) Show IP & VNC port(s) =========
 show_ip_ports(){
-  printf "%b\n" "${MAGENTA}${BOLD}▌ Показать IP и порт(ы) VNC${RESET}"
-  printf "%b\n" "${MAGENTA}▌ Show IP and VNC port(s)${RESET}"
+  printf "%b\n" "${MAGENTA}${BOLD}▌ Show IP and VNC port(s)${RESET}"
   printf "%b\n" "${LINE}"
 
   IP="$(hostname -I | awk '{print $1}')"; [ -z "${IP:-}" ] && IP="127.0.0.1"
@@ -339,20 +345,19 @@ show_ip_ports(){
 
 # ========= 5) Stop VNC server(s) =========
 stop_vnc_server(){
-  printf "%b\n" "${MAGENTA}${BOLD}▌ Остановить VNC${RESET}"
-  printf "%b\n" "${MAGENTA}▌ Stop VNC server(s)${RESET}"
+  printf "%b\n" "${MAGENTA}${BOLD}▌ Stop VNC server(s)${RESET}"
   printf "%b\n" "${LINE}"
 
   local VNC_BIN="/opt/TurboVNC/bin/vncserver"
   [ -x "$VNC_BIN" ] || VNC_BIN="$(command -v vncserver 2>/dev/null || echo /opt/TurboVNC/bin/vncserver)"
 
-  # 1) Собираем список дисплеев из vncserver -list
+  # 1) Collect display list from vncserver -list
   local displays=""
   if "$VNC_BIN" -list >/tmp/vnclist 2>/dev/null; then
     displays="$(grep -oE ':[0-9]+' /tmp/vnclist | sort -u | tr '\n' ' ' || true)"
   fi
 
-  # 2) Фоллбэк: из процессов Xvnc (без pipefail, чтобы не падать)
+  # 2) Fallback: from Xvnc processes (without pipefail to avoid failure)
   set +o pipefail
   if [ -z "$displays" ]; then
     displays="$(pgrep -a Xvnc 2>/dev/null | sed -n 's/.* \([:][0-9]\+\)\b.*/\1/p' | sort -u | tr '\n' ' ' || true)"
@@ -360,13 +365,13 @@ stop_vnc_server(){
   set -o pipefail
 
   if [ -z "$displays" ]; then
-    echo -e "${YELLOW}Активные VNC-сессии не найдены.${RESET}"
+    echo -e "${YELLOW}No active VNC sessions found.${RESET}"
     return 0
   fi
 
-  echo -e "${CYAN}Найдены сеансы:${RESET} ${displays}"
+  echo -e "${CYAN}Found sessions:${RESET} ${displays}"
   for d in $displays; do
-    echo -e "${CYAN}[*] Останавливаю ${d}...${RESET}"
+    echo -e "${CYAN}[*] Stopping ${d}...${RESET}"
     "$VNC_BIN" -kill "$d" >/dev/null 2>&1 || true
 
     local num="${d#:}"
@@ -380,10 +385,10 @@ stop_vnc_server(){
   done
 
   if "$VNC_BIN" -list 2>/dev/null | grep -qE ':[0-9]+' || pgrep -f 'Xvnc.*:' >/dev/null 2>&1; then
-    echo -e "${YELLOW}Часть сеансов всё ещё активна. Проверьте вручную:${RESET}"
+    echo -e "${YELLOW}Some sessions are still active. Check manually:${RESET}"
     "$VNC_BIN" -list 2>/dev/null || true
   else
-    echo -e "${GREEN}[OK] Все сеансы VNC остановлены и очищены.${RESET}"
+    echo -e "${GREEN}[OK] All VNC sessions stopped and cleaned.${RESET}"
   fi
 }
 
@@ -391,25 +396,20 @@ stop_vnc_server(){
 show_menu(){
   clear
   display_logo
-  printf "%b\n" "${BOLD}${CYAN}Выберите действие / Choose an action:${RESET}"
-  printf "%b\n" "  ${GREEN}1)${RESET} Обновить репозитории и установить VNC (сервер)"
-  printf "%b\n" "     ${GRAY}Update repositories & install VNC (server)${RESET}"
-  printf "%b\n" "  ${GREEN}2)${RESET} Установить Block Assist (внутри VNC)"
-  printf "%b\n" "     ${GRAY}Install Block Assist (inside VNC)${RESET}"
-  printf "%b\n" "  ${GREEN}3)${RESET} Запустить Block Assist (внутри VNC)"
-  printf "%b\n" "     ${GRAY}Run Block Assist (inside VNC)${RESET}"
-  printf "%b\n" "  ${GREEN}4)${RESET} Показать IP и порт(ы) VNC"
-  printf "%b\n" "     ${GRAY}Show IP and VNC port(s)${RESET}"
-  printf "%b\n" "  ${GREEN}5)${RESET} Остановить VNC"
-  printf "%b\n" "     ${GRAY}Stop VNC server(s)${RESET}"
-  printf "%b\n" "  ${GREEN}0)${RESET} Выход / Exit"
+  printf "%b\n" "${BOLD}${CYAN}Choose an action:${RESET}"
+  printf "%b\n" "  ${GREEN}1)${RESET} Update repositories & install VNC (server)"
+  printf "%b\n" "  ${GREEN}2)${RESET} Install Block Assist (inside VNC)"
+  printf "%b\n" "  ${GREEN}3)${RESET} Run Block Assist (inside VNC)"
+  printf "%b\n" "  ${GREEN}4)${RESET} Show IP and VNC port(s)"
+  printf "%b\n" "  ${GREEN}5)${RESET} Stop VNC server(s)"
+  printf "%b\n" "  ${GREEN}0)${RESET} Exit"
   printf "%b\n" ""
 }
 
 main(){
   while true; do
     show_menu
-    printf "%b" "${BOLD}Введите номер / Enter number:${RESET} "
+    printf "%b" "${BOLD}Enter number:${RESET} "
     read -r choice
     case "${choice:-}" in
       1) install_vnc_server ; press_enter ;;
@@ -418,7 +418,7 @@ main(){
       4) show_ip_ports ; press_enter ;;
       5) stop_vnc_server ; press_enter ;;
       0) printf "%b\n" "${BLUE}Bye!${RESET}"; exit 0 ;;
-      *) printf "%b\n" "${YELLOW}Неверный выбор. Повторите ввод. / Invalid choice. Try again.${RESET}"; sleep 1 ;;
+      *) printf "%b\n" "${YELLOW}Invalid choice. Try again.${RESET}"; sleep 1 ;;
     esac
   done
 }
