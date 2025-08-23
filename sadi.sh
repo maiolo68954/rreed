@@ -10,7 +10,11 @@ set -Eeuo pipefail
 export DEBIAN_FRONTEND=noninteractive
 
 # ========= Colors / Styles =========
-BOLD="\033[1m"; RESET="\033[0m"
+if command -v tput >/dev/null 2>&1; then
+  BOLD="$(tput bold || true)"; RESET="$(tput sgr0 || true)"
+else
+  BOLD="\033[1m"; RESET="\033[0m"
+fi
 RED="\033[0;31m"; GREEN="\033[0;32m"; YELLOW="\033[1;33m"
 BLUE="\033[0;34m"; CYAN="\033[0;36m"; MAGENTA="\033[0;35m"; GRAY="\033[0;90m"
 LINE="${GRAY}────────────────────────────────────────────────────────────${RESET}"
@@ -25,8 +29,12 @@ fi
 with_sudo(){ if [ -n "$SUDO" ]; then sudo "$@"; else "$@"; fi; }
 pipe_to_bash(){ local url="$1"; shift || true; if [ -n "$SUDO" ]; then curl -fsSL "$url" | sudo bash - "$@"; else curl -fsSL "$url" | bash - "$@"; fi; }
 
-# ========= Random password =========
-gen_pass(){ tr -dc A-Za-z0-9 </dev/urandom | head -c 8; }
+# ========= Safe random password generator =========
+gen_pass(){
+  set +o pipefail
+  tr -dc A-Za-z0-9 </dev/urandom | head -c 8
+  set -o pipefail
+}
 
 # ========= Logo =========
 display_logo(){
@@ -48,27 +56,36 @@ EOF
 
 press_enter(){ printf "%b" "${GRAY}Нажмите Enter для продолжения... / Press Enter to continue...${RESET}"; read -r; }
 
-# ========= 1) VNC server =========
+# ========= 1) VNC server installation =========
 install_vnc_server(){
-  printf "%b\n" "${MAGENTA}${BOLD}▌ Update repositories & install VNC (server)${RESET}"
+  printf "%b\n" "${MAGENTA}${BOLD}▌ Обновление репозиториев и установка VNC (сервер)${RESET}"
+  printf "%b\n" "${MAGENTA}▌ Update repositories & install VNC (server)${RESET}"
   printf "%b\n" "${LINE}"
+
+  echo -e "${CYAN}[*] Generating VNC password...${RESET}"
   VNC_PASS="$(gen_pass)"
-  echo -e "${CYAN}[*] Updating system...${RESET}"
+
+  echo -e "${CYAN}[*] Updating system packages...${RESET}"
   with_sudo apt-get update -y && with_sudo apt-get upgrade -y
-  echo -e "${CYAN}[*] Installing desktop + tools...${RESET}"
+
+  echo -e "${CYAN}[*] Installing desktop environment & tools...${RESET}"
   with_sudo apt-get install -y xfce4 xfce4-goodies autocutsel xclip curl wget git \
     software-properties-common dbus-x11 libglu1-mesa gnupg libegl1-mesa
-  echo -e "${CYAN}[*] Installing VirtualGL...${RESET}"
+
+  echo -e "${CYAN}[*] Downloading & installing VirtualGL...${RESET}"
   VGL_VER="3.1"
   wget -q "https://github.com/VirtualGL/virtualgl/releases/download/${VGL_VER}/virtualgl_${VGL_VER}_amd64.deb" -O /tmp/virtualgl.deb
   with_sudo dpkg -i /tmp/virtualgl.deb || with_sudo apt-get -y -f install
-  echo -e "${CYAN}[*] Installing TurboVNC...${RESET}"
+
+  echo -e "${CYAN}[*] Downloading & installing TurboVNC...${RESET}"
   TURBO_VER="3.1.1"
   wget -q "https://github.com/TurboVNC/turbovnc/releases/download/${TURBO_VER}/turbovnc_${TURBO_VER}_amd64.deb" -O /tmp/turbovnc.deb
   with_sudo dpkg -i /tmp/turbovnc.deb || with_sudo apt-get -y -f install
+
   echo -e "${CYAN}[*] Configuring VirtualGL...${RESET}"
   with_sudo /opt/VirtualGL/bin/vglserver_config -config +s +f -t </dev/null
 
+  echo -e "${CYAN}[*] Creating VNC startup script...${RESET}"
   mkdir -p "$HOME/.vnc"
   cat > "$HOME/.vnc/xstartup" <<'EOF'
 #!/bin/sh
@@ -76,47 +93,40 @@ unset SESSION_MANAGER
 unset DBUS_SESSION_BUS_ADDRESS
 export XKL_XMODMAP_DISABLE=1
 export XDG_CURRENT_DESKTOP="XFCE"
+
+# Clipboard sync
 autocutsel -fork
 autocutsel -selection PRIMARY -fork
 xfce4-clipman &
+
+# Keyboard & input tweaks
 xset r rate 200 40
 setxkbmap us
+
 exec startxfce4
 EOF
   chmod +x "$HOME/.vnc/xstartup"
   touch "$HOME/.Xresources"
+
+  echo -e "${CYAN}[*] Setting VNC password...${RESET}"
   echo "$VNC_PASS" | /opt/TurboVNC/bin/vncpasswd -f > "$HOME/.vnc/passwd"
   chmod 600 "$HOME/.vnc/passwd"
+
   echo -e "${CYAN}[*] Starting VNC server on :1...${RESET}"
   /opt/TurboVNC/bin/vncserver -kill :1 || true
   /opt/TurboVNC/bin/vncserver :1 -geometry 1920x1080 -depth 24
+
+  # GPU check
+  if command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi >/dev/null 2>&1; then
+    echo -e "${GREEN}[OK] GPU detected.${RESET}"
+  else
+    echo -e "${YELLOW}[WARN] GPU not detected or drivers missing.${RESET}"
+  fi
+
   IP="$(hostname -I | awk '{print $1}')"
-  echo -e "${GREEN}[OK] VNC is running!"
-  echo -e "Connect: ${IP}:5901"
-  echo -e "Password: ${VNC_PASS}${RESET}"
-  press_enter
+  echo -e "${LINE}"
+  echo -e "${GREEN}${BOLD}VNC is running!${RESET}"
+  echo -e "Connect with: ${BOLD}${IP}:5901${RESET}"
+  echo -e "Password:     ${BOLD}${VNC_PASS}${RESET}"
+  echo -e "${LINE}"
 }
-
-# ========= Menu =========
-show_menu(){
-  clear
-  display_logo
-  printf "%b\n" "${BOLD}${CYAN}Choose an action:${RESET}"
-  printf "%b\n" "  ${GREEN}1)${RESET} Install VNC server"
-  printf "%b\n" "  ${GREEN}0)${RESET} Exit"
-  printf "%b\n" ""
-}
-
-main(){
-  while true; do
-    show_menu
-    printf "%b" "${BOLD}Enter number:${RESET} "
-    read -r choice
-    case "${choice:-}" in
-      1) install_vnc_server ;;
-      0) echo -e "${BLUE}Bye!${RESET}"; exit 0 ;;
-      *) echo -e "${YELLOW}Invalid choice, try again.${RESET}"; sleep 1 ;;
-    esac
-  done
-}
-main "$@"
