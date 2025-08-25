@@ -1,0 +1,13 @@
+name: Keep Script Running
+
+on:
+  schedule:
+    - cron: "*/10 * * * *" # every 10 minutes
+
+jobs:
+  run-script:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Run Script
+        run: node yourscript.js
