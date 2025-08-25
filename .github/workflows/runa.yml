@@ -1,0 +1,28 @@
+name: sadi Script 24/7
+
+on:
+  workflow_dispatch:   # ম্যানুয়ালি চালাতে চাইলে
+  push:                # নতুন কোড push হলে
+  schedule:
+    - cron: "*/30 * * * *"   # প্রতি ৩০ মিনিটে auto-run হবে
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.12"   # তোমার Python version
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt || true
+
+      - name: Run script
+        run: |
+          python app.py
