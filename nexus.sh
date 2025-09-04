@@ -1,10 +1,7 @@
 #!/bin/bash
 
 # Nexus CLI install
-curl https://cli.nexus.xyz/ | sh
-
-# Refresh bashrc
-source /root/.bashrc
+curl https://cli.nexus.xyz/ | sh && source /root/.bashrc
 
 # Ask for Node ID
 read -p "👉 Enter your Node ID: " NODE_ID
